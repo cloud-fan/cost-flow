@@ -104,27 +104,21 @@ class ZKWCostFlow(src: String, target: String) {
   }
 
   private def initDistance(): Unit = {
-    val queue = mutable.Queue.empty[String]
-    val isInQueue = mutable.HashSet.empty[String]
+    val queue = new UniqueQueue[String]
     queue += target
-    isInQueue += target
     distance += target -> 0
     while (queue.nonEmpty) {
       val vertex = queue.dequeue()
-      isInQueue -= vertex
       for (edgeIndex <- getEdgesFrom(vertex)) {
         val edge = edges(edgeIndex)
         if (edge.residua.capacity > 0) {
           val tmp = vertex.distance - edge.cost // or + edge.residua.cost
           if (tmp < distance.getOrElse(edge.to, Int.MaxValue)) {
             distance += edge.to -> tmp
-            if (!isInQueue(edge.to)) {
-              if (queue.isEmpty || queue.front.distance > tmp) {
-                edge.to +=: queue
-              } else {
-                queue += edge.to
-              }
-              isInQueue += edge.to
+            if (queue.isEmpty || queue.front.distance > tmp) {
+              edge.to +=: queue
+            } else {
+              queue += edge.to
             }
           }
         }
