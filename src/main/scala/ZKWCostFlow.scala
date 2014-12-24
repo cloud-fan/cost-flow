@@ -1,5 +1,6 @@
 import scala.collection.mutable
 
+// do NOT support negative cycle
 class ZKWCostFlow(src: String, target: String) {
   outer =>
 
