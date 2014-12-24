@@ -13,12 +13,12 @@ class ZKWCostFlow(src: String, target: String) {
     def residua = edges(_residua)
   }
 
-  class EdgeIterator(edgeIndex: Int) extends Iterator[Edge] {
+  class EdgeIterator(edgeIndex: Int) extends Iterator[Int] {
     var currentIndex = edgeIndex
     override def hasNext: Boolean = currentIndex > -1
-    override def next(): Edge = {
-      val result = edges(currentIndex)
-      currentIndex = result.next
+    override def next(): Int = {
+      val result = currentIndex
+      currentIndex = edges(result).next
       result
     }
   }
@@ -28,13 +28,13 @@ class ZKWCostFlow(src: String, target: String) {
   private val distance = mutable.HashMap.empty[String, Int]
   private val visited = mutable.HashSet.empty[String]
   private val flows = mutable.HashMap.empty[(String, String), Int]
+  private val currentArc = mutable.HashMap.empty[String, Int]
   private var answer = 0
   private var finished = false
-  private var minCost = Int.MaxValue
 
   private def getHead(v: String) = head.getOrElse(v, -1)
-  private def getEdgesFrom(v: String) = new EdgeIterator(head(v))
-  private def getEdgesFrom(edgeIndex: Int) = new EdgeIterator(edgeIndex)
+  private def getEdgesFrom(v: String): Iterator[Int] = getEdgesFrom(head(v))
+  private def getEdgesFrom(edgeIndex: Int): Iterator[Int] = new EdgeIterator(edgeIndex)
   implicit class Vertex(s: String) {
     def distance = outer.distance(s)
   }
@@ -53,12 +53,14 @@ class ZKWCostFlow(src: String, target: String) {
     } else {
       visited += vertex
       var tmp = flow
-      for (edge <- getEdgesFrom(vertex).takeWhile(_ => tmp > 0)) {
+      for (edgeIndex <- getEdgesFrom(currentArc(vertex)).takeWhile(_ => tmp > 0)) {
+        val edge = edges(edgeIndex)
         if (canAugment(edge)) {
           val delta = augment(edge.to, tmp.min(edge.capacity))
           edge.capacity -= delta
           edge.residua.capacity += delta
           tmp -= delta
+          currentArc += vertex -> edgeIndex
           if (edge.isRealEdge) {
             val path = vertex -> edge.to
             flows += path -> (flows.getOrElse(path, 0) + delta)
@@ -80,7 +82,8 @@ class ZKWCostFlow(src: String, target: String) {
     var delta = Int.MaxValue
     for ((from, edgeIndex) <- head) {
       if (visited(from)) {
-        for (edge <- getEdgesFrom(edgeIndex)) {
+        for (edgeIndex <- getEdgesFrom(edgeIndex)) {
+          val edge = edges(edgeIndex)
           if (edge.capacity > 0 && !visited(edge.to)) {
             delta = math.min(delta, calculateDelta(edge, from))
           }
@@ -93,6 +96,7 @@ class ZKWCostFlow(src: String, target: String) {
     else {
       for (vertex <- head.keysIterator if visited(vertex)) {
         distance += vertex -> (vertex.distance + delta)
+        currentArc += vertex -> head(vertex)
       }
       visited.clear()
       true
@@ -100,33 +104,35 @@ class ZKWCostFlow(src: String, target: String) {
   }
 
   private def initDistance(): Unit = {
-    if (minCost < 0) {
-      val queue = mutable.Queue.empty[String]
-      queue += target
-      distance += target -> 0
-      while (queue.nonEmpty) {
-        val vertex = queue.dequeue()
-        for (edge <- getEdgesFrom(vertex)) {
-          if (edge.residua.capacity > 0) {
-            val tmp = vertex.distance - edge.cost // or + edge.residua.cost
-            if (tmp < distance.getOrElse(edge.to, Int.MaxValue)) {
-              distance += edge.to -> tmp
+    val queue = mutable.Queue.empty[String]
+    val isInQueue = mutable.HashSet.empty[String]
+    queue += target
+    isInQueue += target
+    distance += target -> 0
+    while (queue.nonEmpty) {
+      val vertex = queue.dequeue()
+      isInQueue -= vertex
+      for (edgeIndex <- getEdgesFrom(vertex)) {
+        val edge = edges(edgeIndex)
+        if (edge.residua.capacity > 0) {
+          val tmp = vertex.distance - edge.cost // or + edge.residua.cost
+          if (tmp < distance.getOrElse(edge.to, Int.MaxValue)) {
+            distance += edge.to -> tmp
+            if (!isInQueue(edge.to)) {
               if (queue.isEmpty || queue.front.distance > tmp) {
                 edge.to +=: queue
               } else {
                 queue += edge.to
               }
+              isInQueue += edge.to
             }
           }
         }
       }
-    } else {
-      for (v <- head.keysIterator) distance += v -> 0
     }
   }
 
   def addEdge(from: String, to: String, cost: Int, capacity: Int): Unit = {
-    if (cost < minCost) minCost = cost
     val currentEdgesCount = edges.size
     edges += new Edge(to, cost, capacity, getHead(from), currentEdgesCount + 1, true)
     head += from -> currentEdgesCount
@@ -136,7 +142,10 @@ class ZKWCostFlow(src: String, target: String) {
 
   def zkw() = {
     require(!finished && head.contains(src) && head.contains(target))
+
     initDistance()
+    currentArc ++= head
+
     do {
       while (augment(src, Int.MaxValue) > 0) visited.clear()
     } while (modifyLabel())
