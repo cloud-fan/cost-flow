@@ -4,10 +4,10 @@ import scala.collection.mutable
 
 // do NOT support negative cycle
 // take care of the vertex index
-class ZKWCostFlow(src: Int, target: Int, totalVertexes: Int) {
+class ZKWCostFlow(src: Int, destination: Int, totalVertexes: Int) {
   outer =>
 
-  require(src < totalVertexes && target < totalVertexes)
+  require(src < totalVertexes && destination < totalVertexes)
 
   class Edge(
       val target: Int,
@@ -51,7 +51,7 @@ class ZKWCostFlow(src: Int, target: Int, totalVertexes: Int) {
     def canAugment(edge: Edge) =
       !visited(edge.target) && edge.capacity > 0 && isShortestPath(edge)
 
-    if (vertex == target) {
+    if (vertex == destination) {
       answer += flow * src.distance
       flow
     } else {
@@ -113,9 +113,14 @@ class ZKWCostFlow(src: Int, target: Int, totalVertexes: Int) {
   }
 
   private def initDistance(): Unit = {
-    val queue = new UniqueQueue[Int]
-    queue += target
-    distance(target) = 0
+    val queue = mutable.Queue.empty[Int]
+    val enqueueCount = new Array[Int](totalVertexes)
+    val isInQueue = new Array[Boolean](totalVertexes)
+    queue += destination
+    enqueueCount(destination) = 1
+    isInQueue(destination) = true
+    distance(destination) = 0
+
     while (queue.nonEmpty) {
       val vertex = queue.dequeue()
       for (edgeIndex <- getEdgesFrom(head(vertex))) {
@@ -124,10 +129,17 @@ class ZKWCostFlow(src: Int, target: Int, totalVertexes: Int) {
           val tmp = vertex.distance - edge.cost // or + edge.residua.cost
           if (tmp < distance(edge.target)) {
             distance(edge.target) = tmp
-            if (queue.isEmpty || queue.front.distance > tmp) {
-              edge.target +=: queue
-            } else {
-              queue += edge.target
+            if (!isInQueue(edge.target)) {
+              if (enqueueCount(edge.target) == totalVertexes) {
+                throw new Exception("negative cycle detected")
+              }
+              if (queue.isEmpty || queue.front.distance > tmp) {
+                edge.target +=: queue
+              } else {
+                queue += edge.target
+              }
+              isInQueue(edge.target) = true
+              enqueueCount(edge.target) += 1
             }
           }
         }
