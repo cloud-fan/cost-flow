@@ -31,11 +31,11 @@ class ZKWCostFlow(src: Int, target: Int, totalVertexes: Int) {
 
   private val edges = mutable.ArrayBuffer.empty[Edge]
   private val head = Array.fill(totalVertexes)(-1)
-  private val distance = new Array[Int](totalVertexes) // distance to the target
+  private val distance = Array.fill(totalVertexes)(Int.MaxValue) // distance to the target
   private val visited = new Array[Boolean](totalVertexes)
   private val currentArc = new Array[Int](totalVertexes)
   private val flows = mutable.HashMap.empty[(Int, Int), Int]
-  private var answer = 0
+  private var answer = 0L
   private var finished = false
 
   private def getEdgesFrom(edgeIndex: Int): Iterator[Int] = new EdgeIterator(edgeIndex)
@@ -172,5 +172,9 @@ object ZKWCostFlow extends App {
   s.addEdge(2, 4, 6, 2)
   s.addEdge(2, 1, 1, 7)
   s.addEdge(4, 1, 2, 4)
-  println(s.zkw())
+  val (cost, plan) = s.zkw()
+
+  println(cost -> plan.map { case ((from, to), flow) =>
+    ((vertexes(from), vertexes(to)), flow)
+  })
 }
